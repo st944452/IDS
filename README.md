@@ -1,59 +1,121 @@
-Intrusion Detection System (IDS)
+Intrusion Detection System (IDS) in C
 
-A simple Intrusion Detection System (IDS) written in C, leveraging libpcap for real-time network traffic monitoring and iptables to block malicious IP addresses. This program analyzes network packets and detects potential security threats based on predefined rules, including SYN scans, HTTP requests with SQL injection (SQLi), and Cross-Site Scripting (XSS) attack patterns.
-Features
+This Intrusion Detection System (IDS) is a C-based program that monitors network traffic in real-time, identifies suspicious activities (such as SYN scans, SQL injection, and XSS attacks), and blocks malicious IP addresses using iptables. The project is modularized for maintainability, with separate files for each key functionality.
+Project Overview
 
-    Real-time Network Traffic Monitoring: Uses libpcap to capture live network packets from a specified interface.
-    Pattern-Based Intrusion Detection:
-        SYN Scan Detection: Identifies SYN scans, which are often used in reconnaissance activities to map open ports.
-        SQL Injection (SQLi) Detection: Detects SQL injection patterns in HTTP traffic payloads.
-        Cross-Site Scripting (XSS) Detection: Identifies XSS attack patterns embedded in HTTP traffic payloads.
-    IP Blocking via iptables: Automatically blocks IP addresses associated with malicious activity using iptables.
+This IDS performs the following tasks:
 
-How It Works
+    Traffic Capture: Uses libpcap to capture packets from a network interface.
+    Detection Rules: Analyzes packets for signs of malicious activity.
+        SYN Scan Detection: Detects SYN scans often used for reconnaissance.
+        SQL Injection (SQLi) Detection: Identifies SQLi patterns in HTTP requests.
+        Cross-Site Scripting (XSS) Detection: Detects XSS payloads in HTTP requests.
+    Logging and Blocking: Logs detected events and blocks offending IPs using iptables.
 
-    Network Capture: The IDS uses libpcap to listen to network traffic on the specified interface in promiscuous mode.
-    Packet Analysis: Each captured packet is analyzed based on:
-        TCP SYN Scans: Detects SYN packets without ACK responses, indicating potential port scanning.
-        HTTP Traffic: Examines HTTP payloads to identify SQLi and XSS attack patterns.
-        HTTPS Traffic: Logs HTTPS traffic for monitoring purposes.
-    Alert Logging: Detected attacks are logged to a file (ids_alerts.log) for analysis and record-keeping.
-    IP Blocking: Malicious IPs are blocked using iptables to prevent further access to the network.
+Files and Directory Structure
 
-Setup and Installation
+IDS/
+├── main.c                 # Entry point for the IDS, initializes packet capture.
+├── block.c                # Contains the function to block IPs.
+├── block.h                # Header file for block.c.
+├── log.c                  # Contains the function for logging alerts.
+├── log.h                  # Header file for log.c.
+├── sqli.c                 # Contains SQLi detection logic.
+├── sqli.h                 # Header file for sqli.c.
+├── xss.c                  # Contains XSS detection logic.
+├── xss.h                  # Header file for xss.c.
+├── packet_handler.c       # Processes packets and applies detection rules.
+├── packet_handler.h       # Header file for packet_handler.c.
+└── ids_alerts.log         # Log file for detected threats (generated at runtime).
+
+Detailed Module Breakdown
+1. main.c - Program Entry Point
+
+The main file sets up the network device for capturing and starts the packet capture loop. It utilizes libpcap to list devices, select the first available network interface, and capture packets.
+
+    Key Functions:
+        main: Initializes the IDS, selects a device, opens it for live capture, and runs pcap_loop to process each packet with the packet_handler.
+
+2. packet_handler.c - Packet Processing
+
+This file contains the packet_handler function, which is triggered for every captured packet. It inspects packet headers and applies various rules to detect attacks.
+
+    Detection Rules:
+        SYN Scan Detection: Checks for TCP SYN packets without an ACK flag, a sign of port scanning.
+        HTTP Traffic Analysis: Processes packets with port 80 (HTTP) for SQLi and XSS patterns.
+        HTTPS Traffic Logging: Logs information about HTTPS traffic for monitoring (without inspection).
+    Key Functions:
+        packet_handler: Determines packet type and applies rules for SYN scan, SQLi, and XSS. It uses functions from sqli.h, xss.h, log.h, and block.h.
+
+3. block.c - IP Blocking
+
+This module provides the block_ip function, which uses iptables to block IP addresses associated with suspicious activities.
+
+    Key Functions:
+        block_ip: Executes an iptables command to drop all incoming traffic from a specific IP. This function runs iptables via execvp in a forked process to avoid shell access vulnerabilities.
+
+    Error Handling: Checks if iptables command fails and logs an error message if blocking fails.
+
+4. log.c - Alert Logging
+
+This module handles logging detected events to ids_alerts.log, which stores each detection for later review.
+
+    Key Functions:
+        log_alert: Opens ids_alerts.log in append mode and writes the alert message. If the file fails to open, it logs an error.
+
+5. sqli.c - SQL Injection Detection
+
+This module contains the detect_sqli function, which uses regular expressions to identify SQLi patterns in HTTP packet payloads.
+
+    Detection Pattern:
+        Identifies common SQL injection signatures, such as ' OR 1=1, SELECT ... FROM, and UNION SELECT, using a regular expression.
+    Key Functions:
+        detect_sqli: Compiles a regex to match SQLi patterns and returns 1 if a match is found or 0 if not. Frees the compiled regex memory after usage.
+
+6. xss.c - Cross-Site Scripting (XSS) Detection
+
+This module provides the detect_xss function, which scans HTTP payloads for potential XSS attacks.
+
+    Detection Pattern:
+        Detects XSS patterns like <script>, javascript:, and event handlers like onerror= in payloads.
+
+    Key Functions:
+        detect_xss: Uses a regex to identify XSS patterns and returns 1 if a match is found or 0 if not.
+
+Installation and Setup
 Prerequisites
 
-    libpcap: The IDS relies on libpcap for packet capture.
-        Install libpcap and its development headers:
+    libpcap: Install the libpcap library and its development headers.
+        Ubuntu/Debian:
 
-        # Ubuntu/Debian
-        sudo apt update
-        sudo apt install libpcap-dev
+sudo apt update
+sudo apt install libpcap-dev
 
-        # CentOS/RHEL
+CentOS/RHEL:
+
         sudo yum install libpcap-devel
 
-Compile the Program
+Compiling the Project
 
-    Clone or download the project files.
-    Compile the program using gcc:
+To compile the project, navigate to the project directory and run:
 
-    gcc -o IDS IDS.c -lpcap
+gcc -o IDS main.c block.c log.c sqli.c xss.c packet_handler.c -lpcap
 
-Run the Program
+Running the IDS
+
+Run the compiled binary with sudo to allow network capture and iptables modifications:
 
 sudo ./IDS
 
-    Note: The program requires root privileges to access the network interface in promiscuous mode and to execute iptables commands.
+    Note: The program requires root privileges for network monitoring and IP blocking.
 
-Usage Example
+Usage
 
 Upon execution, the IDS will:
 
-    Detect network interfaces and choose the first available one for monitoring.
-    Start capturing packets and analyzing them based on the intrusion rules.
-    Log alerts for detected intrusions in ids_alerts.log.
-    Block malicious IPs using iptables.
+    Automatically select the first available network interface.
+    Capture packets in real-time and analyze each packet for suspicious patterns.
+    Log alerts to ids_alerts.log and block malicious IP addresses as defined by the detection rules.
 
 Sample Output:
 
@@ -63,25 +125,3 @@ SYN scan detected: 192.168.1.10 -> 192.168.1.1
 Blocked IP: 192.168.1.10
 SQL Injection detected from: 203.0.113.5
 Blocked IP: 203.0.113.5
-
-Project Structure
-
-    IDS.c: The main source file containing all functionality for traffic monitoring, packet analysis, and IP blocking.
-    ids_alerts.log: A log file where detected intrusion alerts are recorded.
-
-Key Functions
-
-    block_ip(const char *ip_address):
-        Blocks the specified IP address using iptables.
-
-    log_alert(const char *alert_msg):
-        Logs detected intrusion alerts to ids_alerts.log.
-
-    detect_sqli(const char *payload):
-        Detects potential SQL injection patterns within HTTP payloads.
-
-    detect_xss(const char *payload):
-        Detects Cross-Site Scripting (XSS) attack patterns within HTTP payloads.
-
-    packet_handler(...):
-        Main packet analysis function that applies various rules for SYN scan, SQLi, and XSS detection.
